@@ -1,4 +1,3 @@
-// Benchmark utilities inspired by tinygrad's clean, simple approach
 #pragma once
 
 #include <chrono>
@@ -6,7 +5,6 @@
 #include <iomanip>
 #include <iostream>
 
-// Simple timing utility - like tinygrad's approach
 class Timer {
 public:
     void start() { start_time = std::chrono::high_resolution_clock::now(); }
@@ -22,15 +20,12 @@ private:
     std::chrono::high_resolution_clock::time_point start_time;
 };
 
-// Benchmark runner - inspired by tinygrad's benchmarking practices
 template<typename Func>
 double benchmark(const std::string& name, Func&& func, int warmup=3, int iterations=10) {
-    // Warmup runs (tinygrad does this)
     for (int i = 0; i < warmup; i++) {
         func();
     }
     
-    // Actual benchmark
     Timer timer;
     timer.start();
     for (int i = 0; i < iterations; i++) {
@@ -43,13 +38,11 @@ double benchmark(const std::string& name, Func&& func, int warmup=3, int iterati
     return elapsed;
 }
 
-// Calculate TFLOPS from operations and time
 inline double calculate_tflops(long long ops, double time_us) {
     double time_sec = time_us / 1e6;
     return (ops / time_sec) / 1e12;
 }
 
-// ANSI colors for clean output
 namespace Colors {
     constexpr const char* RESET = "\033[0m";
     constexpr const char* RED = "\033[31m";

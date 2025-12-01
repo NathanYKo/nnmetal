@@ -1,2 +1,12 @@
 .history
 
+# Compiled executables
+train_cpu_single
+train_cpu_multi
+train_gpu
+train_mnist
+
+# MNIST data files (can be downloaded)
+*.ubyte
+*.ubyte.gz
+

@@ -1,6 +1,3 @@
-// MNIST Dataset Loader
-// Downloads and parses MNIST IDX format files
-
 #pragma once
 
 #include <vector>
@@ -10,7 +7,6 @@
 #include <cstdint>
 #include <algorithm>
 
-// Reverse byte order for endianness conversion
 inline uint32_t reverse_bytes(uint32_t val) {
     return ((val & 0x000000FF) << 24) |
            ((val & 0x0000FF00) << 8) |
@@ -18,7 +14,6 @@ inline uint32_t reverse_bytes(uint32_t val) {
            ((val & 0xFF000000) >> 24);
 }
 
-// Download MNIST files if they don't exist
 bool download_mnist_file(const std::string& url, const std::string& filename) {
     std::ifstream test_file(filename);
     if (test_file.good()) {
@@ -32,7 +27,6 @@ bool download_mnist_file(const std::string& url, const std::string& filename) {
     return result == 0;
 }
 
-// Load MNIST images (IDX format)
 bool load_mnist_images(const std::string& filename, std::vector<std::vector<float>>& images) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
@@ -80,7 +74,6 @@ bool load_mnist_images(const std::string& filename, std::vector<std::vector<floa
     return true;
 }
 
-// Load MNIST labels (IDX format)
 bool load_mnist_labels(const std::string& filename, std::vector<int>& labels) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) {
@@ -97,7 +90,6 @@ bool load_mnist_labels(const std::string& filename, std::vector<int>& labels) {
         return false;
     }
     
-    // Read number of labels
     uint32_t num_labels;
     file.read(reinterpret_cast<char*>(&num_labels), sizeof(num_labels));
     num_labels = reverse_bytes(num_labels);
@@ -105,7 +97,6 @@ bool load_mnist_labels(const std::string& filename, std::vector<int>& labels) {
     labels.clear();
     labels.resize(num_labels);
     
-    // Read label data
     for (uint32_t i = 0; i < num_labels; i++) {
         uint8_t label;
         file.read(reinterpret_cast<char*>(&label), sizeof(label));
@@ -115,7 +106,6 @@ bool load_mnist_labels(const std::string& filename, std::vector<int>& labels) {
     return true;
 }
 
-// Convert labels to one-hot encoding
 void labels_to_onehot(const std::vector<int>& labels, std::vector<std::vector<float>>& onehot, int num_classes = 10) {
     onehot.clear();
     onehot.resize(labels.size());
@@ -128,14 +118,12 @@ void labels_to_onehot(const std::vector<int>& labels, std::vector<std::vector<fl
     }
 }
 
-// Load MNIST dataset
 bool load_mnist_dataset(std::vector<std::vector<float>>& train_images,
                        std::vector<std::vector<float>>& train_labels_onehot,
                        std::vector<std::vector<float>>& test_images,
                        std::vector<std::vector<float>>& test_labels_onehot,
                        bool download = true) {
     
-    // Use a reliable source for MNIST
     const std::string base_url = "https://storage.googleapis.com/cvdf-datasets/mnist/";
     const std::string train_images_file = "train-images-idx3-ubyte";
     const std::string train_labels_file = "train-labels-idx1-ubyte";
