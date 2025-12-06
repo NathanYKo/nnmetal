@@ -44,7 +44,7 @@ make run-all
 
 All implementations:
 - Train a neural network (784 → 256 → 128 → 10) on MNIST
-- Run for 5 epochs
+- Run for 100 epochs
 - Display per-epoch timing and total training time
 - Test on the test set and report accuracy
 
@@ -72,4 +72,37 @@ All implementations:
 make clean  # Remove compiled executables
 make        # Rebuild all
 ```
+
+## System Specification
+
+**Epochs:**
+
+100
+
+**Learning Rate:**
+
+0.01
+
+**Data Size:**
+
+60,000 training samples, 10,000 test samples (standard MNIST dataset)
+
+**Topology:**
+
+784 → 256 → 128 → 10
+
+**System Information:**
+
+Metal GPU framework (uses system default Metal device)
+
+**Parallelization:**
+
+- 256 threads per threadgroup
+- One GPU thread per (batch_item, neuron) combination
+- Batch size: 64 (multiple inputs processed in parallel)
+
+**Other:**
+
+- Shuffle data set every epoch
+- Kernels and buffers are created once. These buffers are then written to every epoch.
 

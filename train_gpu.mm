@@ -436,7 +436,7 @@ int main() {
     std::cout << Colors::MAGENTA << "\n=== Neural Network Training on MNIST (GPU Metal) ===" << Colors::RESET << std::endl;
     
     const int batch_size = 64;
-    const int epochs = 5;
+    const int epochs = 100;
     const float initial_learning_rate = 0.01f;
     
     NeuralNet net({{784, 256}, {256, 128}, {128, 10}});
@@ -444,7 +444,7 @@ int main() {
     std::cout << Colors::CYAN << "Configuration:" << Colors::RESET << std::endl;
     std::cout << "  Batch size: " << batch_size << std::endl;
     std::cout << "  Epochs: " << epochs << std::endl;
-    std::cout << "  Initial learning rate: " << initial_learning_rate << " (with decay)" << std::endl;
+    std::cout << "  Learning rate: " << initial_learning_rate << std::endl;
     std::cout << "  Network: " << net.layers[0].input_size;
     for (const auto& layer : net.layers) {
         std::cout << " → " << layer.output_size;
@@ -485,7 +485,7 @@ int main() {
     
     for (int epoch = 0; epoch < epochs; epoch++) {
         auto epoch_start = std::chrono::high_resolution_clock::now();
-        float learning_rate = initial_learning_rate * powf(0.9f, epoch / 5.0f);
+        float learning_rate = initial_learning_rate;
         
         std::shuffle(train_indices.begin(), train_indices.end(), gen);
         
