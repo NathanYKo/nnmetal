@@ -85,7 +85,7 @@ make        # Rebuild all
 
 **Data Size:**
 
-60,000 training samples, 10,000 test samples (standard MNIST dataset)
+50,000 training samples, 5,000 test samples (split from MNIST training set)
 
 **Topology:**
 

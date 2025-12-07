@@ -297,6 +297,26 @@ int main() {
         return 1;
     }
     
+    // Split dataset: use first 50,000 for training, last 5,000 for testing
+    const int train_size = 50000;
+    const int test_size = 5000;
+    
+    if (train_images.size() < train_size + test_size) {
+        std::cerr << "Error: Not enough training samples. Need " << (train_size + test_size) 
+                  << " but only have " << train_images.size() << std::endl;
+        return 1;
+    }
+    
+    // Use last 5,000 from training set as test set
+    test_images.clear();
+    test_labels_onehot.clear();
+    test_images.insert(test_images.end(), train_images.begin() + train_size, train_images.end());
+    test_labels_onehot.insert(test_labels_onehot.end(), train_labels_onehot.begin() + train_size, train_labels_onehot.end());
+    
+    // Resize training set to first 55,000
+    train_images.resize(train_size);
+    train_labels_onehot.resize(train_size);
+    
     std::cout << Colors::GREEN << "Dataset loaded successfully!" << Colors::RESET << std::endl << std::endl;
     
     std::cout << Colors::YELLOW << "=== Benchmarking on Full Training Dataset ===" << Colors::RESET << std::endl;
@@ -318,58 +338,74 @@ int main() {
         float learning_rate = initial_learning_rate;
         std::shuffle(train_indices.begin(), train_indices.end(), gen);
         
-        float epoch_loss = 0.0f;
-        float epoch_acc = 0.0f;
-        int num_batches = 0;
-        
         int total_batches = (train_images.size() + batch_size - 1) / batch_size;
-        for (int batch = 0; batch < total_batches; batch++) {
-            int batch_start = batch * batch_size;
-            int batch_end = std::min(batch_start + batch_size, (int)train_images.size());
-            int current_batch_size = batch_end - batch_start;
+        
+        // Process batches in parallel - each thread handles one batch
+        int batches_per_thread = std::max(1, total_batches / num_threads);
+        std::vector<std::thread> batch_threads;
+        std::mutex net_mutex;
+        
+        auto batch_worker = [&](int batch_start_idx, int batch_end_idx) {
+            NeuralNet local_net = net;  // Local copy for this thread
             
-            std::vector<float> batch_input(batch_size * 784, 0.0f);
-            std::vector<float> batch_targets(batch_size * 10, 0.0f);
-            
-            for (int b = 0; b < current_batch_size; b++) {
-                size_t idx = train_indices[batch_start + b];
-                std::copy(train_images[idx].begin(), train_images[idx].end(),
-                         batch_input.begin() + b * 784);
-                std::copy(train_labels_onehot[idx].begin(), train_labels_onehot[idx].end(),
-                         batch_targets.begin() + b * 10);
+            for (int batch = batch_start_idx; batch < batch_end_idx; batch++) {
+                int batch_start = batch * batch_size;
+                int batch_end = std::min(batch_start + batch_size, (int)train_images.size());
+                int current_batch_size = batch_end - batch_start;
+                
+                std::vector<float> batch_input(batch_size * 784, 0.0f);
+                std::vector<float> batch_targets(batch_size * 10, 0.0f);
+                
+                for (int b = 0; b < current_batch_size; b++) {
+                    size_t idx = train_indices[batch_start + b];
+                    std::copy(train_images[idx].begin(), train_images[idx].end(),
+                             batch_input.begin() + b * 784);
+                    std::copy(train_labels_onehot[idx].begin(), train_labels_onehot[idx].end(),
+                             batch_targets.begin() + b * 10);
+                }
+                
+                std::vector<std::vector<float>> layer_outputs(local_net.layers.size());
+                const float* curr_input = batch_input.data();
+                for (size_t l = 0; l < local_net.layers.size(); l++) {
+                    layer_outputs[l].resize(batch_size * local_net.layers[l].output_size);
+                    cpu_forward_multi(curr_input, local_net.layers[l], layer_outputs[l].data(), batch_size, 1);
+                    curr_input = layer_outputs[l].data();
+                }
+                
+                cpu_softmax(layer_outputs.back().data(), batch_size, 10);
+                
+                cpu_backward_multi(local_net, batch_input.data(), layer_outputs,
+                                  batch_targets.data(), batch_size, learning_rate, 1);
             }
             
-            std::vector<std::vector<float>> layer_outputs(net.layers.size());
-            const float* curr_input = batch_input.data();
+            // Update shared network with synchronized access
+            std::lock_guard<std::mutex> lock(net_mutex);
             for (size_t l = 0; l < net.layers.size(); l++) {
-                layer_outputs[l].resize(batch_size * net.layers[l].output_size);
-                cpu_forward_multi(curr_input, net.layers[l], layer_outputs[l].data(), batch_size, num_threads);
-                curr_input = layer_outputs[l].data();
+                for (size_t i = 0; i < net.layers[l].weights.size(); i++) {
+                    net.layers[l].weights[i] = local_net.layers[l].weights[i];
+                }
+                for (size_t i = 0; i < net.layers[l].bias.size(); i++) {
+                    net.layers[l].bias[i] = local_net.layers[l].bias[i];
+                }
             }
-            
-            cpu_softmax(layer_outputs.back().data(), batch_size, 10);
-            
-            cpu_backward_multi(net, batch_input.data(), layer_outputs,
-                              batch_targets.data(), batch_size, learning_rate, num_threads);
-            
-            float loss = compute_loss(layer_outputs.back().data(), batch_targets.data(), current_batch_size, 10);
-            float acc = compute_accuracy(layer_outputs.back().data(), batch_targets.data(), current_batch_size, 10);
-            
-            epoch_loss += loss;
-            epoch_acc += acc;
-            num_batches++;
+        };
+        
+        for (int t = 0; t < num_threads; t++) {
+            int start = t * batches_per_thread;
+            int end = (t == num_threads - 1) ? total_batches : (t + 1) * batches_per_thread;
+            if (start < total_batches) {
+                batch_threads.emplace_back(batch_worker, start, end);
+            }
         }
         
-        epoch_loss /= num_batches;
-        epoch_acc /= num_batches;
+        for (auto& t : batch_threads) {
+            t.join();
+        }
         
         auto epoch_end = std::chrono::high_resolution_clock::now();
         double epoch_time = std::chrono::duration<double, std::milli>(epoch_end - epoch_start).count();
         
-        std::cout << "Epoch " << epoch << ": Loss = " << std::fixed << std::setprecision(4) 
-                  << epoch_loss << ", Accuracy = " << std::setprecision(2) 
-                  << (epoch_acc * 100.0f) << "%, LR = " << std::setprecision(4) << learning_rate
-                  << ", Time = " << std::setprecision(2) << (epoch_time / 1000.0) << "s" << std::endl;
+        std::cout << "Epoch " << epoch << ": Time = " << std::setprecision(2) << (epoch_time / 1000.0) << "s" << std::endl;
     }
     
     auto total_end = std::chrono::high_resolution_clock::now();

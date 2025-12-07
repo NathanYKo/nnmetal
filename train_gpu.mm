@@ -460,6 +460,26 @@ int main() {
         return 1;
     }
     
+    // Split dataset: use first 50,000 for training, last 5,000 for testing
+    const int train_size = 50000;
+    const int test_size = 5000;
+    
+    if (train_images.size() < train_size + test_size) {
+        std::cerr << "Error: Not enough training samples. Need " << (train_size + test_size) 
+                  << " but only have " << train_images.size() << std::endl;
+        return 1;
+    }
+    
+    // Use last 5,000 from training set as test set
+    test_images.clear();
+    test_labels_onehot.clear();
+    test_images.insert(test_images.end(), train_images.begin() + train_size, train_images.end());
+    test_labels_onehot.insert(test_labels_onehot.end(), train_labels_onehot.begin() + train_size, train_labels_onehot.end());
+    
+    // Resize training set to first 55,000
+    train_images.resize(train_size);
+    train_labels_onehot.resize(train_size);
+    
     std::cout << Colors::GREEN << "Dataset loaded successfully!" << Colors::RESET << std::endl << std::endl;
     
     MetalTrainingContext* ctx = init_metal_training(net, batch_size);
@@ -489,10 +509,6 @@ int main() {
         
         std::shuffle(train_indices.begin(), train_indices.end(), gen);
         
-        float epoch_loss = 0.0f;
-        float epoch_acc = 0.0f;
-        int num_batches = 0;
-        
         int total_batches = (train_images.size() + batch_size - 1) / batch_size;
         for (int batch = 0; batch < total_batches; batch++) {
             int batch_start = batch * batch_size;
@@ -511,29 +527,12 @@ int main() {
             }
             
             metal_train_step(ctx, net, batch_size, batch_input, batch_targets, learning_rate, current_batch_size);
-            
-            std::vector<float> output(batch_size * 10);
-            memcpy(output.data(), [ctx->buffers.back()[3] contents],
-                   sizeof(float) * batch_size * 10);
-            
-            float loss = compute_loss(output.data(), batch_targets.data(), current_batch_size, 10);
-            float acc = compute_accuracy(output.data(), batch_targets.data(), current_batch_size, 10);
-            
-            epoch_loss += loss;
-            epoch_acc += acc;
-            num_batches++;
         }
-        
-        epoch_loss /= num_batches;
-        epoch_acc /= num_batches;
         
         auto epoch_end = std::chrono::high_resolution_clock::now();
         double epoch_time = std::chrono::duration<double, std::milli>(epoch_end - epoch_start).count();
         
-        std::cout << "Epoch " << epoch << ": Loss = " << std::fixed << std::setprecision(4) 
-                  << epoch_loss << ", Accuracy = " << std::setprecision(2) 
-                  << (epoch_acc * 100.0f) << "%, LR = " << std::setprecision(4) << learning_rate
-                  << ", Time = " << std::setprecision(2) << (epoch_time / 1000.0) << "s" << std::endl;
+        std::cout << "Epoch " << epoch << ": Time = " << std::setprecision(2) << (epoch_time / 1000.0) << "s" << std::endl;
     }
     
     auto total_end = std::chrono::high_resolution_clock::now();
